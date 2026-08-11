@@ -30,7 +30,11 @@ Cart* create_cart(float budget);
 int add_item_with_replacement(Cart* cart, const char* name, float price, 
                             int priority, int quantity, const char* category);
 int remove_item_by_name(Cart* cart, const char* name);
-int remove_selected_item(Cart* cart, void* item_ptr);  // NEW
+int remove_selected_item(Cart* cart, void* item_ptr);
+int get_removable_items(const Cart* cart, int target_priority,
+                         char out_names[][50], float* out_costs,
+                         int* out_priorities, char out_categories[][20],
+                         int max_items);
 void clear_cart(Cart* cart);
 void free_cart(Cart* cart);
 

@@ -1,3 +1,4 @@
+#app.py
 import streamlit as st
 import sys
 import os
@@ -25,8 +26,17 @@ st.set_page_config(
     layout="wide"
 )
 
-# Categories
-CATEGORIES = ["Dairy", "Vegetables", "Snacks", "Meat", "Beverages", "Other"]
+# Categories and their display metadata (single source of truth — used by
+# the budget map, pie chart, and text bars so they can't drift out of sync).
+CATEGORY_META = [
+    {"name": "Dairy", "emoji": "🥛", "color": "#FFD700"},
+    {"name": "Vegetables", "emoji": "🥦", "color": "#32CD32"},
+    {"name": "Snacks", "emoji": "🍪", "color": "#FF6347"},
+    {"name": "Meat", "emoji": "🍖", "color": "#DC143C"},
+    {"name": "Beverages", "emoji": "🥤", "color": "#1E90FF"},
+    {"name": "Other", "emoji": "📦", "color": "#9370DB"},
+]
+CATEGORIES = [c["name"] for c in CATEGORY_META]
 
 # Initialize session state
 if 'cart' not in st.session_state:
@@ -52,17 +62,9 @@ if 'removable_items' not in st.session_state:
 
 def create_budget_map(cart):
     """Create visual budget map with progress bars for each category"""
-    
-    # Category configuration
-    categories = [
-        {"name": "Dairy", "emoji": "🥛", "color": "#FFD700"},
-        {"name": "Vegetables", "emoji": "🥦", "color": "#32CD32"},
-        {"name": "Snacks", "emoji": "🍪", "color": "#FF6347"},
-        {"name": "Meat", "emoji": "🍖", "color": "#DC143C"},
-        {"name": "Beverages", "emoji": "🥤", "color": "#1E90FF"},
-        {"name": "Other", "emoji": "📦", "color": "#9370DB"}
-    ]
-    
+
+    categories = CATEGORY_META
+
     st.subheader("📊 Category Budget Map")
     
     # Create two columns: visualization and data
@@ -162,24 +164,22 @@ def create_budget_map(cart):
 
 def create_pie_chart(cart):
     """Create pie chart visualization of category spending"""
-    
-    categories = ["Dairy", "Vegetables", "Snacks", "Meat", "Beverages", "Other"]
-    colors = ['#FFD700', '#32CD32', '#FF6347', '#DC143C', '#1E90FF', '#9370DB']
-    
+
     # Collect data
     labels = []
     sizes = []
     cat_colors = []
-    
-    for i, cat_name in enumerate(categories):
+
+    for cat in CATEGORY_META:
         try:
-            spent = cart.get_category_spent(cat_name)
+            spent = cart.get_category_spent(cat["name"])
             if spent > 0:
-                labels.append(cat_name)
+                labels.append(cat["name"])
                 sizes.append(spent)
-                cat_colors.append(colors[i])
-        except:
-            pass
+                cat_colors.append(cat["color"])
+        except Exception as e:
+            if st.session_state.debug_mode:
+                st.write(f"{cat['name']}: chart data unavailable ({e})")
     
     if sizes:  # Only create chart if we have data
         st.subheader("🥧 Spending Distribution")
@@ -204,19 +204,12 @@ def create_text_budget_bars(cart, compact=False):
     
     if not compact:
         st.subheader("📈 Budget Progress (Text Version)")
-    
-    categories = [
-        ("🥛 Dairy", "Dairy"),
-        ("🥦 Vegetables", "Vegetables"),
-        ("🍪 Snacks", "Snacks"),
-        ("🍖 Meat", "Meat"),
-        ("🥤 Beverages", "Beverages"),
-        ("📦 Other", "Other")
-    ]
-    
+
     has_data = False
-    
-    for display_name, cat_name in categories:
+
+    for cat in CATEGORY_META:
+        display_name = f"{cat['emoji']} {cat['name']}"
+        cat_name = cat['name']
         try:
             spent = cart.get_category_spent(cat_name)
             remaining = cart.get_category_remaining(cat_name)
@@ -616,9 +609,7 @@ with tab1:
                     if selected_items:
                         # Remove selected items
                         for item in selected_items:
-                            # We need to implement remove_selected_item in cart_wrapper.py
-                            # For now, use remove_item_by_name
-                            st.session_state.cart.remove_item(item['name'])
+                            st.session_state.cart.remove_selected_item(item['name'])
                         
                         # Now try to add the pending item again
                         pending = st.session_state.pending_add

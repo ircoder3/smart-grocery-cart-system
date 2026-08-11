@@ -1,3 +1,4 @@
+//cart.c
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -7,6 +8,15 @@
 #define MAX_DISPLAY_SIZE 4096
 #define CATEGORY_COUNT 6
 #define MAX_REMOVABLE_ITEMS 20
+
+// Verbose per-call tracing is opt-in: build with `-DCART_DEBUG` to get it.
+// Keeps normal runs (and the Streamlit console) readable while still letting
+// you flip on full tracing when something's actually wrong.
+#ifdef CART_DEBUG
+#define DBG(...) DBG(__VA_ARGS__)
+#else
+#define DBG(...) do {} while (0)
+#endif
 
 // Helper function to create a new item
 static Item* create_item(const char* name, float price, int priority, int quantity, const char* category) {
@@ -48,7 +58,7 @@ Cart* create_cart(float budget) {
         cart->categories[i].current_spent = 0.0;
     }
     
-    printf("[C] Cart created with budget $%.2f\n", budget);
+    DBG("[C] Cart created with budget $%.2f\n", budget);
     return cart;
 }
 
@@ -75,7 +85,7 @@ static int check_category_budget(Cart* cart, const char* category, float item_co
         return 1;
     }
     
-    printf("[C] ❌ %s budget exceeded: $%.2f + $%.2f > $%.2f\n", 
+    DBG("[C] ❌ %s budget exceeded: $%.2f + $%.2f > $%.2f\n", 
            category, cat->current_spent, item_cost, cat->max_amount);
     return 0;
 }
@@ -125,7 +135,7 @@ static int remove_lowest_priority_same_category(Cart* cart, int target_priority,
         }
     }
     
-    printf("[C] 🗑️ SAME CAT Removed: %s (P:%d, $%.2f) from %s\n", 
+    DBG("[C] 🗑️ SAME CAT Removed: %s (P:%d, $%.2f) from %s\n", 
            lowest->name, lowest->priority, cost, target_category);
     
     free(lowest);
@@ -135,30 +145,30 @@ static int remove_lowest_priority_same_category(Cart* cart, int target_priority,
 // Main add function with priority-based replacement - NEW LOGIC
 int add_item_with_replacement(Cart* cart, const char* name, float price, int priority, int quantity, const char* category) {
     if (!cart) {
-        printf("[C] Cart is NULL\n");
+        DBG("[C] Cart is NULL\n");
         return 0;
     }
     
     float item_cost = price * quantity;
     
-    printf("\n[C] ========== ADD ITEM ATTEMPT ==========\n");
-    printf("[C] Item: %s\n", name);
-    printf("[C] Price: $%.2f x %d = $%.2f\n", price, quantity, item_cost);
-    printf("[C] Priority: %d\n", priority);
-    printf("[C] Category: %s\n", category);
-    printf("[C] Current spent: $%.2f / $%.2f\n", cart->spent, cart->budget);
-    printf("[C] Items in cart: %d\n", cart->item_count);
+    DBG("\n[C] ========== ADD ITEM ATTEMPT ==========\n");
+    DBG("[C] Item: %s\n", name);
+    DBG("[C] Price: $%.2f x %d = $%.2f\n", price, quantity, item_cost);
+    DBG("[C] Priority: %d\n", priority);
+    DBG("[C] Category: %s\n", category);
+    DBG("[C] Current spent: $%.2f / $%.2f\n", cart->spent, cart->budget);
+    DBG("[C] Items in cart: %d\n", cart->item_count);
     
     // 1. First check overall budget
     if (cart->spent + item_cost > cart->budget + 0.001) {
-        printf("[C] ❌ Overall budget exceeded: $%.2f + $%.2f > $%.2f\n",
+        DBG("[C] ❌ Overall budget exceeded: $%.2f + $%.2f > $%.2f\n",
                cart->spent, item_cost, cart->budget);
         return 0;
     }
     
     // 2. Check category budget STRICTLY
     if (!check_category_budget(cart, category, item_cost)) {
-        printf("[C] → Category budget exceeded! Trying SAME CATEGORY removal first...\n");
+        DBG("[C] → Category budget exceeded! Trying SAME CATEGORY removal first...\n");
         
         // Remove from same category only
         int same_cat_removals = 0;
@@ -166,15 +176,15 @@ int add_item_with_replacement(Cart* cart, const char* name, float price, int pri
             if (remove_lowest_priority_same_category(cart, priority, category)) {
                 same_cat_removals++;
             } else {
-                printf("[C] → No more lower priority items in %s category\n", category);
+                DBG("[C] → No more lower priority items in %s category\n", category);
                 break;
             }
         }
         
         // 3. Still over category budget? Check if we made space
         if (!check_category_budget(cart, category, item_cost)) {
-            printf("[C] 💡 %s still over budget after same-category removal!\n", category);
-            printf("[C] 👆 Return code 2 = Show user removal options\n");
+            DBG("[C] 💡 %s still over budget after same-category removal!\n", category);
+            DBG("[C] 👆 Return code 2 = Show user removal options\n");
             return 2;  // SIGNAL: Show UI options to user
         }
     }
@@ -182,7 +192,7 @@ int add_item_with_replacement(Cart* cart, const char* name, float price, int pri
     // 4. ADD ITEM (passed all checks)
     Item* new_item = create_item(name, price, priority, quantity, category);
     if (!new_item) {
-        printf("[C] ❌ Failed to create item\n");
+        DBG("[C] ❌ Failed to create item\n");
         return 0;
     }
     
@@ -201,7 +211,7 @@ if (cart->head == NULL) {
     last->next = new_item;
 }
 
-printf("[C] After adding: cart->head=%p, cart->head->next=%p\n", 
+DBG("[C] After adding: cart->head=%p, cart->head->next=%p\n", 
        (void*)cart->head, (void*)(cart->head ? cart->head->next : NULL));
     
     // Update totals
@@ -214,17 +224,92 @@ printf("[C] After adding: cart->head=%p, cart->head->next=%p\n",
         cart->categories[cat_idx].current_spent += item_cost;
     }
     
-    printf("[C] ✅ %s added successfully!\n", name);
-    printf("[C] New total: $%.2f, Items: %d\n", cart->spent, cart->item_count);
-    printf("[C] ======================================\n");
+    DBG("[C] ✅ %s added successfully!\n", name);
+    DBG("[C] New total: $%.2f, Items: %d\n", cart->spent, cart->item_count);
+    DBG("[C] ======================================\n");
     
     return 1;
+}
+
+// Remove a specific item by matching pointer identity (used once the caller
+// already knows exactly which node to drop, e.g. after get_removable_items).
+int remove_selected_item(Cart* cart, void* item_ptr) {
+    if (!cart || !cart->head || !item_ptr) {
+        return 0;
+    }
+
+    Item* target = (Item*)item_ptr;
+    Item* current = cart->head;
+    Item* prev = NULL;
+
+    while (current && current != target) {
+        prev = current;
+        current = current->next;
+    }
+
+    if (!current) {
+        DBG("[C] remove_selected_item: pointer not found in list\n");
+        return 0;
+    }
+
+    float removed_cost = current->price * current->quantity;
+
+    if (prev) {
+        prev->next = current->next;
+    } else {
+        cart->head = current->next;
+    }
+
+    cart->spent -= removed_cost;
+    cart->item_count--;
+
+    int cat_index = find_category_index(cart, current->category);
+    if (cat_index != -1) {
+        cart->categories[cat_index].current_spent -= removed_cost;
+        if (cart->categories[cat_index].current_spent < 0) {
+            cart->categories[cat_index].current_spent = 0;
+        }
+    }
+
+    DBG("[C] Removed selected item: %s ($%.2f)\n", current->name, removed_cost);
+    free(current);
+    return 1;
+}
+
+// Build a list of items eligible for removal to make room for an item at
+// target_priority: anything currently in the cart with strictly lower
+// priority. Caller supplies out_names/out_prices/... arrays of length
+// max_items; returns how many were written. This backs the "choose what to
+// remove" UI when automatic same-category removal isn't enough.
+int get_removable_items(const Cart* cart, int target_priority,
+                         char out_names[][50], float* out_costs,
+                         int* out_priorities, char out_categories[][20],
+                         int max_items) {
+    if (!cart) return 0;
+
+    int count = 0;
+    Item* current = cart->head;
+
+    while (current && count < max_items) {
+        if (current->priority < target_priority) {
+            strncpy(out_names[count], current->name, 49);
+            out_names[count][49] = '\0';
+            out_costs[count] = current->price * current->quantity;
+            out_priorities[count] = current->priority;
+            strncpy(out_categories[count], current->category, 19);
+            out_categories[count][19] = '\0';
+            count++;
+        }
+        current = current->next;
+    }
+
+    return count;
 }
 
 // Remove item by name
 int remove_item_by_name(Cart* cart, const char* name) {
     if (!cart || !cart->head) {
-        printf("[C] Cannot remove: cart is empty or NULL\n");
+        DBG("[C] Cannot remove: cart is empty or NULL\n");
         return 0;
     }
     
@@ -237,7 +322,7 @@ int remove_item_by_name(Cart* cart, const char* name) {
     }
     
     if (!current) {
-        printf("[C] Item '%s' not found\n", name);
+        DBG("[C] Item '%s' not found\n", name);
         return 0;
     }
     
@@ -262,8 +347,8 @@ int remove_item_by_name(Cart* cart, const char* name) {
         }
     }
     
-    printf("[C] Removed item: %s ($%.2f)\n", name, removed_cost);
-    printf("[C] New total: $%.2f, Items: %d\n", cart->spent, cart->item_count);
+    DBG("[C] Removed item: %s ($%.2f)\n", name, removed_cost);
+    DBG("[C] New total: $%.2f, Items: %d\n", cart->spent, cart->item_count);
     
     free(current);
     return 1;
@@ -272,7 +357,7 @@ int remove_item_by_name(Cart* cart, const char* name) {
 // Get cart total
 float get_cart_total(const Cart* cart) {
     if (!cart) {
-        printf("[C] get_cart_total: cart is NULL\n");
+        DBG("[C] get_cart_total: cart is NULL\n");
         return 0.0;
     }
     return cart->spent;
@@ -281,7 +366,7 @@ float get_cart_total(const Cart* cart) {
 // Get remaining budget
 float get_remaining_budget(const Cart* cart) {
     if (!cart) {
-        printf("[C] get_remaining_budget: cart is NULL\n");
+        DBG("[C] get_remaining_budget: cart is NULL\n");
         return 0.0;
     }
     float remaining = cart->budget - cart->spent;
@@ -291,7 +376,7 @@ float get_remaining_budget(const Cart* cart) {
 // Get item count
 int get_item_count(const Cart* cart) {
     if (!cart) {
-        printf("[C] get_item_count: cart is NULL\n");
+        DBG("[C] get_item_count: cart is NULL\n");
         return 0;
     }
     return cart->item_count;
@@ -305,7 +390,7 @@ int set_category_budget(Cart* cart, const char* category_name, float max_amount)
     if (cat_index == -1) return 0;
     
     cart->categories[cat_index].max_amount = max_amount;
-    printf("[C] Set budget for %s: $%.2f\n", category_name, max_amount);
+    DBG("[C] Set budget for %s: $%.2f\n", category_name, max_amount);
     return 1;
 }
 
@@ -386,7 +471,7 @@ const char* get_cart_display(const Cart* cart) {
         cart->spent, cart->item_count, cart->budget,
         cart->budget - cart->spent);
     
-    printf("[C] get_cart_display: wrote %d items\n", item_num - 1);
+    DBG("[C] get_cart_display: wrote %d items\n", item_num - 1);
     
     return buffer;
 }
@@ -483,7 +568,7 @@ void clear_cart(Cart* cart) {
         cart->categories[i].current_spent = 0.0;
     }
     
-    printf("[C] Cart cleared\n");
+    DBG("[C] Cart cleared\n");
 }
 
 // Free cart
@@ -491,7 +576,7 @@ void free_cart(Cart* cart) {
     if (!cart) return;
     clear_cart(cart);
     free(cart);
-    printf("[C] Cart freed from memory\n");
+    DBG("[C] Cart freed from memory\n");
 }
 
 // Print cart state for debugging

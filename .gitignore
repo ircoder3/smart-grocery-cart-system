@@ -1,0 +1,20 @@
+# Compiled C library (build it locally with the command in README)
+libcart.so
+cart.dll
+*.dylib
+*.o
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+env/
+
+# Streamlit
+.streamlit/secrets.toml
+
+# OS / editor cruft
+.DS_Store
+.vscode/
+.idea/
